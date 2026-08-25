@@ -96,6 +96,35 @@ class PacketTunnelSettingsGenerator {
         if let specialJunk5 = tunnelConfiguration.interface.specialJunk5 {
             wgSettings.append("i5=\(specialJunk5)\n")
         }
+        if let headerProtectionKey = tunnelConfiguration.interface.headerProtectionKey {
+            wgSettings.append("header_protection_key=\(headerProtectionKey.hexKey)\n")
+        }
+        if let contentPaddingAddition = tunnelConfiguration.interface.contentPaddingAddition,
+           !contentPaddingAddition.isEmpty {
+            wgSettings.append("content_padding_addition=\(contentPaddingAddition)\n")
+        }
+        if let rekeyAfterTime = tunnelConfiguration.interface.rekeyAfterTime, !rekeyAfterTime.isEmpty {
+            wgSettings.append("rekey_after_time=\(rekeyAfterTime)\n")
+        }
+        if let rekeyTimeout = tunnelConfiguration.interface.rekeyTimeout, !rekeyTimeout.isEmpty {
+            wgSettings.append("rekey_timeout=\(rekeyTimeout)\n")
+        }
+        if let rejectAfterTime = tunnelConfiguration.interface.rejectAfterTime, !rejectAfterTime.isEmpty {
+            wgSettings.append("reject_after_time=\(rejectAfterTime)\n")
+        }
+        if let keepaliveTimeout = tunnelConfiguration.interface.keepaliveTimeout, !keepaliveTimeout.isEmpty {
+            wgSettings.append("keepalive_timeout=\(keepaliveTimeout)\n")
+        }
+        if let maxHandshakeAttempts = tunnelConfiguration.interface.maxHandshakeAttempts,
+           !maxHandshakeAttempts.isEmpty {
+            wgSettings.append("max_handshake_attempts=\(maxHandshakeAttempts)\n")
+        }
+        if let randomTrailers = tunnelConfiguration.interface.randomTrailers, !randomTrailers.isEmpty {
+            wgSettings.append("random_trailers=\(Self.uapiBool(randomTrailers))\n")
+        }
+        if let disableCookies = tunnelConfiguration.interface.disableCookies, !disableCookies.isEmpty {
+            wgSettings.append("disable_cookies=\(Self.uapiBool(disableCookies))\n")
+        }
         if !tunnelConfiguration.peers.isEmpty {
             wgSettings.append("replace_peers=true\n")
         }
@@ -113,7 +142,7 @@ class PacketTunnelSettingsGenerator {
             }
             resolutionResults.append(result)
 
-            let persistentKeepAlive = peer.persistentKeepAlive ?? 0
+            let persistentKeepAlive = peer.persistentKeepAlive ?? "0"
             wgSettings.append("persistent_keepalive_interval=\(persistentKeepAlive)\n")
             if !peer.allowedIPs.isEmpty {
                 wgSettings.append("replace_allowed_ips=true\n")
@@ -251,6 +280,17 @@ class PacketTunnelSettingsGenerator {
         }
 
         return (ipv4ExcludedRoutes, ipv6ExcludedRoutes)
+    }
+
+    /// Converts awg-quick on/off (and 0/1/true/false) to UAPI 1/0.
+    /// amneziawg-go uses strconv.ParseBool and rejects "on"/"off".
+    private class func uapiBool(_ value: String) -> String {
+        switch value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "on", "1", "true", "t", "yes":
+            return "1"
+        default:
+            return "0"
+        }
     }
 
     private class func reresolveEndpoint(endpoint: Endpoint) -> EndpointResolutionResult {
