@@ -94,6 +94,13 @@ extension TunnelConfiguration {
         interfaceConfiguration?.specialJunk3 = base?.interface.specialJunk3
         interfaceConfiguration?.specialJunk4 = base?.interface.specialJunk4
         interfaceConfiguration?.specialJunk5 = base?.interface.specialJunk5
+        interfaceConfiguration?.headerProtectionKey = base?.interface.headerProtectionKey
+        interfaceConfiguration?.contentPaddingAddition = base?.interface.contentPaddingAddition
+        interfaceConfiguration?.rekeyAfterTime = base?.interface.rekeyAfterTime
+        interfaceConfiguration?.rekeyTimeout = base?.interface.rekeyTimeout
+        interfaceConfiguration?.rejectAfterTime = base?.interface.rejectAfterTime
+        interfaceConfiguration?.keepaliveTimeout = base?.interface.keepaliveTimeout
+        interfaceConfiguration?.maxHandshakeAttempts = base?.interface.maxHandshakeAttempts
 
         if let interfaceConfiguration = interfaceConfiguration {
             self.init(name: base?.name, interface: interfaceConfiguration, peers: peerConfigurations)
