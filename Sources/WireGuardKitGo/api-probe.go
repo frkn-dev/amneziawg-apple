@@ -84,7 +84,8 @@ func probeKeyToHex(keyB64 string) (string, error) {
 }
 
 // probeJunkLines converts the AWG junk params JSON ({"Jc": "3", ..., "H4": "...",
-// values are strings) into uapi device config lines. Empty/zero values are skipped.
+// "I1":"...", "HeaderProtectionKey":"<base64>", values are strings) into uapi
+// device config lines. Empty/zero values are skipped.
 func probeJunkLines(junkParamsJSON string) ([]string, error) {
 	junkParamsJSON = strings.TrimSpace(junkParamsJSON)
 	if junkParamsJSON == "" || junkParamsJSON == "{}" {
@@ -94,7 +95,7 @@ func probeJunkLines(junkParamsJSON string) ([]string, error) {
 	if err := json.Unmarshal([]byte(junkParamsJSON), &params); err != nil {
 		return nil, err
 	}
-	keys := []string{"Jc", "Jmin", "Jmax", "S1", "S2", "S3", "S4", "H1", "H2", "H3", "H4"}
+	keys := []string{"Jc", "Jmin", "Jmax", "S1", "S2", "S3", "S4", "H1", "H2", "H3", "H4", "I1", "I2", "I3", "I4", "I5"}
 	var lines []string
 	for _, key := range keys {
 		value := strings.TrimSpace(params[key])
@@ -102,6 +103,13 @@ func probeJunkLines(junkParamsJSON string) ([]string, error) {
 			continue
 		}
 		lines = append(lines, strings.ToLower(key)+"="+value)
+	}
+	if hpKey := strings.TrimSpace(params["HeaderProtectionKey"]); hpKey != "" {
+		hexKey, err := probeKeyToHex(hpKey)
+		if err != nil {
+			return nil, fmt.Errorf("HeaderProtectionKey: %w", err)
+		}
+		lines = append(lines, "header_protection_key="+hexKey)
 	}
 	return lines, nil
 }
