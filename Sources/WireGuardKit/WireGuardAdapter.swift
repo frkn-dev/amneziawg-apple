@@ -48,6 +48,11 @@ public class WireGuardAdapter {
     /// Used to suppress transient `.unsatisfied` events immediately after installing routes (common on Wi‑Fi with kill-switch routes).
     private var lastNetworkSettingsUpdateAt: Date?
 
+    /// Delayed endpoint rebinds after a physical network change. One immediate
+    /// `wgBumpSockets` is not enough: the new interface may still be coming up
+    /// and DNS may still be served by the old path.
+    private var pendingPathRefreshWorkItems = [DispatchWorkItem]()
+
     /// Tracks whether the tunnel has ever had a successful handshake during the lifetime of this adapter instance.
     private var everHadHandshake = false
 
@@ -240,6 +245,7 @@ public class WireGuardAdapter {
 
             self.networkMonitor?.cancel()
             self.networkMonitor = nil
+            self.cancelPendingPathRefreshes()
 
             self.state = .stopped
 
@@ -469,7 +475,9 @@ public class WireGuardAdapter {
                 wgSetConfig(handle, wgConfig)
                 wgDisableSomeRoamingForBrokenMobileSemantics(handle)
                 wgBumpSockets(handle)
+                self.schedulePathRefreshes(handle: handle, settingsGenerator: settingsGenerator)
             } else {
+                self.cancelPendingPathRefreshes()
                 if self.shouldPauseBackendOnUnsatisfiedPath() {
                     self.logHandler(.verbose, "Connectivity offline, pausing backend.")
 
@@ -516,6 +524,42 @@ public class WireGuardAdapter {
     }
 
     // MARK: - iOS offline detection helpers
+
+    /// Cancel delayed endpoint rebinds when the path goes away or the adapter stops.
+    private func cancelPendingPathRefreshes() {
+        pendingPathRefreshWorkItems.forEach { $0.cancel() }
+        pendingPathRefreshWorkItems.removeAll()
+    }
+
+    /// A Wi‑Fi → LTE handover can report `.satisfied` before the cellular
+    /// interface is actually usable or its DNS resolver is ready. The immediate
+    /// bump in `didReceivePathUpdate` then rebinds to a dead path and nothing
+    /// retries it. Re-apply the peer endpoint and bump the UDP sockets again
+    /// once the new path has had time to settle.
+    private func schedulePathRefreshes(handle: Int32,
+                                       settingsGenerator: PacketTunnelSettingsGenerator) {
+        cancelPendingPathRefreshes()
+
+        for (index, delay) in [2.0, 6.0, 12.0].enumerated() {
+            let item = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                guard case .started(let currentHandle, _) = self.state, currentHandle == handle else {
+                    return
+                }
+
+                self.logHandler(.verbose,
+                                "Network change: delayed endpoint refresh \(index + 1), delay \(delay)s")
+                let (wgConfig, resolutionResults) = settingsGenerator.endpointUapiConfiguration()
+                self.logEndpointResolutionResults(resolutionResults)
+                wgSetConfig(handle, wgConfig)
+                wgDisableSomeRoamingForBrokenMobileSemantics(handle)
+                wgBumpSockets(handle)
+            }
+
+            pendingPathRefreshWorkItems.append(item)
+            workQueue.asyncAfter(deadline: .now() + delay, execute: item)
+        }
+    }
 
     private var unsatisfiedGracePeriodAfterNetworkSettings: TimeInterval {
         // Long enough to cover the route-flip window on Wi‑Fi (en0 → utun*) while the first handshake completes,
